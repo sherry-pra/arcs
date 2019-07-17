@@ -109,6 +109,19 @@ describe('Handle', () => {
     assert.strictEqual(stored['value'], '2');
   });
 
+  it('disable handle sets storage into a noOp storage', async () => {
+    const arc = new Arc({id: ArcId.newForTest('test'), context: manifest, loader});
+
+    // tslint:disable-next-line: variable-name
+    const Foo = manifest.schemas.Foo.entityClass();
+    const fooStorage = await arc.createStore(Foo.type);
+    const fooHandle = handleFor(fooStorage, IdGenerator.newSession()) as Singleton;
+
+    assert(fooHandle.getStorage().name !== 'NoOpStorage');
+    fooHandle.disable(fooStorage);
+    assert(fooHandle.getStorage().name === 'NoOpStorage');
+  });
+
   it('remove entry from store', async () => {
     const arc = new Arc({id: ArcId.newForTest('test'), context: manifest, loader});
     const barStore = await arc.createStore(manifest.schemas.Bar.type.collectionOf()) as CollectionStorageProvider;

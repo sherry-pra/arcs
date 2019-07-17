@@ -56,6 +56,10 @@ export abstract class StorageProxy implements Store {
     return new SingletonProxy(id, type, port, pec, scheduler, name);
   }
 
+  static newNoOpProxy(type: Type) {
+    return new NoOpStorageProxy(null, type, null, null, null, 'NoOpStorage');
+  }
+
   storageKey: string;
   readonly id: string;
   readonly type: Type;
@@ -132,6 +136,13 @@ export abstract class StorageProxy implements Store {
     }
   }
 
+  /**
+   * Called by Handle to dissociate particle/handle pair associated with this proxy
+   */
+  deregister(particleIn: Particle, handleIn: Handle): void {
+    this.observers = this.observers.filter(({particle, handle}) => particle !== particleIn || handle !== handleIn);
+  }
+
   _onSynchronize({version, model}: {version: number, model: SerializedModelEntry[]}): void {
     if (this.version !== undefined && version <= this.version) {
       console.warn(`StorageProxy '${this.id}' received stale model version ${version}; ` +
@@ -169,7 +180,7 @@ export abstract class StorageProxy implements Store {
     }
     if (update.version <= this.version) {
       console.warn(`StorageProxy '${this.id}' received stale update version ${update.version}; ` +
-                   `current is ${this.version}`);
+        `current is ${this.version}`);
       return;
     }
 
@@ -553,6 +564,74 @@ export class BigCollectionProxy extends StorageProxy implements BigCollectionSto
   }
 }
 
+/**
+ * NoOpStorageProxy is an implementation of StorageProxy that does no operations. It silently
+ * absorbs and throws away all changes without creating any logging, warnings or any other visible
+ * behaviors or persistent changes.
+ * 
+ * It is aimed to be used by disabled particles to finish their job without causing any post-disabled
+ * async errors, etc.
+ * 
+ * TODO(sherrypra): Add a unit test to ensure this stays in sync with the real storage APIs
+ */
+export class NoOpStorageProxy extends StorageProxy implements CollectionStore, BigCollectionStore, SingletonStore {
+  _getModelForSync(): {id: string;} | ModelValue[] {
+    return null;
+  }
+  _synchronizeModel(version: number, model: SerializedModelEntry[]): boolean {
+    return true;
+  }
+  _processUpdate(update: {version: number;}, apply?: boolean): {} {
+    return null;
+  }
+  reportExceptionInHost(exception: PropagatedException): void {}
+
+  deregister() {}
+
+  register() {}
+
+  _onSynchronize({version, model}: {version: number, model: SerializedModelEntry[]}): void {}
+
+  _onUpdate(update: {version: number}): void {}
+
+  _notify(kind: string, details, predicate = (ignored: HandleOptions) => true) {}
+
+  _processUpdates(): void {}
+
+  protected generateBarrier(): string {
+    return null;
+  }
+  async get(id?: string) {
+    return new Promise(resolve => {});
+  }
+  // tslint:disable-next-line: no-any
+  async store(value: any, keys: string[], particleId?: string): Promise<void> {
+    return new Promise(resolve => {});
+  }
+  async clear(particleId: string): Promise<void> {
+    return new Promise(resolve => {});
+  }
+  async remove(id: string, keys: string[], originatorId?: string): Promise<void> {
+    return new Promise(resolve => {});
+  }
+  async toList(): Promise<ModelValue[]> {
+    return new Promise(resolve => {});
+  }
+  async stream(pageSize: number, forward?: boolean): Promise<number> {
+    return new Promise(resolve => {});
+  }
+  // tslint:disable-next-line: no-any
+  async cursorNext(cursorId: number): Promise<any> {
+    return new Promise(resolve => {});
+  }
+  async cursorClose(cursorId: number): Promise<void> {
+    throw new Promise(resolve => {});
+  }
+  async set(entity: {}, particleId: string): Promise<void> {
+    throw new Promise(resolve => {});
+  }
+}
+
 export class StorageProxyScheduler {
   private _scheduled = false;
   private _queues = new Map<Particle, Map<Handle, [string, Particle, {}][]>>();
@@ -623,7 +702,7 @@ export class StorageProxyScheduler {
             handle._notify(...args);
           } catch (e) {
             console.error('Error dispatching to particle', e);
-            handle.storage.reportExceptionInHost(new SystemException(e, handle._particleId, 'StorageProxyScheduler::_dispatch'));
+            handle.getStorage().reportExceptionInHost(new SystemException(e, handle._particleId, 'StorageProxyScheduler::_dispatch'));
           }
         }
       }
