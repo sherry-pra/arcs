@@ -18,8 +18,8 @@ import {Content} from './slot-consumer.js';
  */
 export class SlotProxy {
   readonly slotName: string;
-  readonly particle: Particle;
   readonly providedSlots: ReadonlyMap<string, string>;
+  private particle: Particle;
   private readonly apiPort: PECInnerPort;
   // eslint-disable-next-line func-call-spacing
   private readonly handlers = new Map<string, ((event: {}) => void)[]>();
@@ -66,5 +66,17 @@ export class SlotProxy {
     for (const handler of this.handlers.get(event.handler) || []) {
       handler(event);
     }
+  }
+
+  /**
+   * gives all rendering capabilities from the current particle to the given one
+   */
+  rewire(particle: Particle): void {
+    const oldParticle = this.particle;
+    this.particle = particle;
+
+    oldParticle.removeSlotProxy(this.slotName);
+    this.particle.addSlotProxy(this);
+    this.particle.renderSlot(this.slotName, ['model', 'template', 'templateName']);
   }
 }
